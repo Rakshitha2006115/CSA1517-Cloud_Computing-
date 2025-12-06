@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car & Bike Rental</title>
+    <style>
+        /* CSS will go here */
+        body {
+    font-family: sans-serif;
+    margin: 0;
+    background-color: #f4f4f9;
+    color: #333;
+}
+header {
+    background-color: #007bff;
+    color: white;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+header h1 {
+    margin: 0;
+}
+nav a {
+    color: white;
+    margin-left: 20px;
+    text-decoration: none;
+    font-weight: bold;
+}
+main {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+#search-section {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+#search-form label, #search-form input, #search-form select {
+    margin-right: 15px;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+#search-form button {
+    padding: 10px 20px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+#search-form button:hover {
+    background-color: #218838;
+}
+#vehicle-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+.vehicle-card {
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    width: 300px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+.vehicle-card h4 {
+    color: #007bff;
+    margin-top: 0;
+}
+.vehicle-card p {
+    margin: 5px 0;
+}
+.vehicle-card .rate {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #dc3545;
+}
+.book-btn {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    background-color: #007bff;
+    color: white;
+    text-align: center;
+    border: none;
+    border-radius: 4px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+.unavailable {
+    opacity: 0.5;
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+    </style>
+</head>
+<body>
+    <header>
+        <h1>DriveEasy Rentals 🚗💨</h1>
+        <nav>
+            <a href="#">Home</a>
+            <a href="#">Bookings</a>
+            <a href="#">Login</a>
+        </nav>
+    </header>
+
+    <main>
+        <div id="search-section">
+            <h2>Find Your Ride</h2>
+            <form id="search-form">
+                <label for="start-date">Pick-up Date:</label>
+                <input type="date" id="start-date" required>
+
+                <label for="end-date">Drop-off Date:</label>
+                <input type="date" id="end-date" required>
+
+                <label for="vehicle-type">Type:</label>
+                <select id="vehicle-type">
+                    <option value="All">All</option>
+                    <option value="Car">Car</option>
+                    <option value="Bike">Bike</option>
+                </select>
+
+                <button type="submit">Search Available Vehicles</button>
+            </form>
+        </div>
+
+        <div id="results-section">
+            <h3>Available Vehicles (<span id="results-count">0</span>)</h3>
+            <div id="vehicle-list">
+                <p id="no-results" style="display:none; color: red;">No vehicles found for the selected dates.</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /* JavaScript will go here */
+        // --- 1. MOCK DATASET (Your database simulation) ---
+const mockVehicles = [
+    { vehicle_id: 101, type: 'Car', make: 'Toyota', model: 'Camry', rate_per_day: 50.00, city: 'New Delhi', image: 'car.jpg' },
+    { vehicle_id: 102, type: 'Car', make: 'Maruti', model: 'Swift', rate_per_day: 35.00, city: 'Mumbai', image: 'car.jpg' },
+    { vehicle_id: 201, type: 'Bike', make: 'Royal Enfield', model: 'Classic 350', rate_per_day: 25.00, city: 'Mumbai', image: 'bike.jpg' },
+    { vehicle_id: 202, type: 'Bike', make: 'Bajaj', model: 'Pulsar 150', rate_per_day: 15.00, city: 'New Delhi', image: 'bike.jpg' }
+];
+
+const mockBookings = [
+    // B1001: Camry (101) is busy Dec 10-15
+    { vehicle_id: 101, start_date: '2025-12-10', end_date: '2025-12-15', status: 'Confirmed' },
+    // B1003: Swift (102) is busy Dec 20-23
+    { vehicle_id: 102, start_date: '2025-12-20', end_date: '2025-12-23', status: 'Confirmed' },
+    // B1005: Pulsar (202) is busy Dec 21-22
+    { vehicle_id: 202, start_date: '2025-12-21', end_date: '2025-12-22', status: 'Confirmed' }
+];
+
+// --- 2. CORE LOGIC FUNCTIONS ---
+
+/**
+ * Checks if a requested date range conflicts with an existing booking.
+ * @param {string} reqStart - Requested start date (YYYY-MM-DD)
+ * @param {string} reqEnd - Requested end date (YYYY-MM-DD)
+ * @param {string} bookStart - Booking start date
+ * @param {string} bookEnd - Booking end date
+ * @returns {boolean} True if there is an overlap, False otherwise.
+ */
+function isDateOverlap(reqStart, reqEnd, bookStart, bookEnd) {
+    const rStart = new Date(reqStart);
+    const rEnd = new Date(reqEnd);
+    const bStart = new Date(bookStart);
+    const bEnd = new Date(bookEnd);
+
+    // Overlap condition: (StartA < EndB) AND (EndA > StartB)
+    return rStart < bEnd && rEnd > bStart;
+}
+
+/**
+ * Calculates the number of days between two dates.
+ */
+function calculateDays(startDate, endDate) {
+    const oneDay = 24 * 60 * 60 * 1000; // hours*minutes*seconds*milliseconds
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Add one day because the rental period includes both start and end dates.
+    return Math.round(Math.abs((end - start) / oneDay)) + 1; 
+}
+
+
+// --- 3. DOM MANIPULATION & EVENT HANDLERS ---
+
+const form = document.getElementById('search-form');
+const vehicleListDiv = document.getElementById('vehicle-list');
+const resultsCountSpan = document.getElementById('results-count');
+const noResultsP = document.getElementById('no-results');
+
+// Initial load: show all vehicles (assuming no dates selected yet)
+window.onload = () => displayVehicles(mockVehicles);
+
+form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const vehicleType = document.getElementById('vehicle-type').value;
+
+    if (!startDate || !endDate) {
+        alert("Please select both start and end dates.");
+        return;
+    }
+
+    const filteredVehicles = mockVehicles.filter(vehicle => {
+        // Filter by Type first
+        if (vehicleType !== 'All' && vehicle.type !== vehicleType) {
+            return false;
+        }
+
+        // Check Availability (The core interactive logic)
+        const isBooked = mockBookings.some(booking => {
+            return booking.vehicle_id === vehicle.vehicle_id && booking.status === 'Confirmed' &&
+                   isDateOverlap(startDate, endDate, booking.start_date, booking.end_date);
+        });
+
+        // Only return vehicles that are NOT booked for the requested period
+        return !isBooked;
+    });
+
+    displayVehicles(filteredVehicles, startDate, endDate);
+});
+
+
+/**
+ * Generates and displays the vehicle cards in the UI.
+ * @param {Array} vehicles - The list of vehicles to display.
+ * @param {string} startDate - Selected start date.
+ * @param {string} endDate - Selected end date.
+ */
+function displayVehicles(vehicles, startDate = null, endDate = null) {
+    vehicleListDiv.innerHTML = ''; // Clear previous results
+    resultsCountSpan.textContent = vehicles.length;
+
+    if (vehicles.length === 0) {
+        noResultsP.style.display = 'block';
+        return;
+    }
+    noResultsP.style.display = 'none';
+
+    const numDays = startDate && endDate ? calculateDays(startDate, endDate) : null;
+
+    vehicles.forEach(vehicle => {
+        const totalCost = numDays ? (vehicle.rate_per_day * numDays).toFixed(2) : vehicle.rate_per_day.toFixed(2) + ' (Per Day)';
+        
+        const card = document.createElement('div');
+        card.className = 'vehicle-card';
+        card.innerHTML = `
+            <h4>${vehicle.make} ${vehicle.model} (${vehicle.type})</h4>
+            <p><strong>City:</strong> ${vehicle.city}</p>
+            <p><strong>Rate:</strong> ₹${vehicle.rate_per_day.toFixed(2)} / day</p>
+            <p><strong class="rate">Total Cost:</strong> ₹${totalCost}</p>
+            <button class="book-btn" onclick="alert('Booking ${vehicle.model} from ${startDate} to ${endDate}. (Feature not yet fully implemented)')">
+                Book Now
+            </button>
+        `;
+        vehicleListDiv.appendChild(card);
+    });
+}
+    </script>
+</body>
+</html>
